@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "dirs_info",
+    "dirs_report"
+]
