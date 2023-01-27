@@ -7,19 +7,21 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 use tokio_stream::wrappers::ReadDirStream;
 
-/// Number of parallel recursive calls to make in each directory.
-/// This is _not_ the number of green threads to use, since each
-/// directory will spawn another *N* green threads. Thus a value
-/// larger than 1 would likely spiral out of control with
-/// "Too many open files" errors.
+/// Number of concurrent recursive calls to make in each directory.
+/// This value is to be passed to [StreamExt::buffered] or [StreamExt::buffer_unordered].
 /// 
-/// Besides, for several other reasons it's preferable to parallelize
-/// at the top-level using GNU parallel e.g.
+/// This is _not_ the same as how many "threads" to use, since each
+/// recursive call to a directory will spawn another *N* green threads.
+/// The growth is quadratic thus a value larger than 1 would likely
+/// spiral out of control with "Too many open files" errors.
+/// 
+/// Besides, for several other reasons (such as organization, multi-processing)
+/// it's preferable to parallelize at the top-level using GNU parallel e.g.
 /// 
 /// ```shell
 /// find /neuro/labs/grantlab/research/ -type d -maxdepth 1 | parallel oldir
 /// ```
-const BUFFER_UNORDERED: usize = 1;
+const CONCURRENT_RECURSIVE_CALLS: usize = 1;
 
 #[derive(Parser)]
 #[clap(
@@ -112,7 +114,7 @@ async fn oldir_recursive(
                         }
                     })
                     .map(|(entry, metadata)| oldir_recursive(entry.path(), metadata, since, all_older))
-                    .buffer_unordered(BUFFER_UNORDERED)
+                    .buffered(CONCURRENT_RECURSIVE_CALLS)
                     .unzip()
                     .await;
                 
