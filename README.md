@@ -37,17 +37,21 @@ data: it's preferable to only include their parent `base/b`.
 
 ```python
 # Python-like pseudocode
-def oldir(path, timestamp) -> list[Path]:
+def oldir(path, timestamp, subpath_is_older) -> (list[Path], bool):
     if path.is_file():
-        return [p for p in [path] if p.older_than(timestamp)]
-    subpath_info = [oldir
-(subpath, timestamp) for subpath in path]
-    if all(len(v) <= 1 for v in subpath_info):
-        return [path]  # path is a dir, everything it contains is older
+        if p.older_than(timestamp):
+            return ([path], True)
+        else:
+            return ([], False)
+    subpath_info, subpaths_are_older = unzip(oldir(subpath, timestamp, subpath_is_older) for subpath in path)
+    if all(subpaths_are_older):
+        # path is a dir, all immediate subpaths are either older file or
+        # dir containing only older files
+        return [path], True
     else:
-        return flatten(subpath_info)  # path is a dir containing some things which are newer
+        # path is a dir containing some things which are newer
+        return flatten(subpath_info), False
 ```
-
 
 ### `dirs_report`
 
