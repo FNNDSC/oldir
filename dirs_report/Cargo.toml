@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.68"
 clap = { version = "4.1.4", features = ["derive"] }
-dirs_info = { path = "../dirs_info", version = "0.1.0" }
 owo-colors = "3.5.0"
 serde_json = "1.0.91"
 ubyte = "0.10.3"
+users = "0.11.0"

@@ -2,72 +2,75 @@
 
 We are trying to find unused data on the FNNDSC NFS share.
 
-## The Data
-
-Basic `find` looks like:
-
-```shell
-sudo find -L /neuro/labs/grantlab/research -type f -atime '+730'
-```
-
-This `find` command finds files which have not been accessed in the past 2 years.
-`sudo` is needed to each all files (since some you might not have read access to).
-
-These `find` commands were ran in `tmux`.
-
-### Parallelizing `find`
-
-Run parallel subprocesses of `find` for each immediate subdirectory of `/neuro/labs/grantlab/research`
-
-```shell
-mkdir -vp data/research
-find /neuro/labs/grantlab/research -maxdepth 1 -type d | parallel --verbose 'find {} -type f -atime "+730" > data/research/{/}.txt'
-```
-
-For users:
-
-```shell
-mkdir -vp data/users
-find /neuro/users/ -maxdepth 1 -type l | parallel --dry-run 'find -L {}/ -type f -atime "+730" > data/users/{/}.txt'
-```
-
-Join all the results together:
-
-```shell
-cat data/research/*.txt > data/everything_research.txt
-cat 
-```
-
 ## How It Works
 
-Next, we process the "raw" data using the program `dirs_info`. It identifies parent directories
-which contain files belonging to the same directory. The parent directory's path, owner, and size
-are spat out as JSON.
-
-The JSON output of `dirs_info` can be parsed by `dirs_report` which pretty-prints the size,
-aggregates the sum of sizes, and optionally filters based on username.
-
-## Usage Examples
-
-These Rust programs were compiled on `centurion`, which runs x86_64 Ubuntu 22.04.1 LTS.
-`dirs_info` and `dirs_report` are only going to work on similar machines.
+Our first approach would be to use `find` to search for files which weren't accessed anytime recently
+(say, in the last 2 years) by checking the file metadata/stat's `atime`.
 
 ```shell
-# REPORT EVERYTHING!!!
-cat older_than_5y_in_research.txt | bin/dirs_info /neuro/labs/grantlab/research | bin/dirs_report
-
-# ok, that was a bad idea... From now on, let's just look at part of the data first.
-
-# get a list of usernames:
-head -n 1000 older_than_5y_in_research.txt | bin/dirs_info /neuro/labs/grantlab/research | jq -r '.owner' | sort | uniq
-
-# report folders by daniel.haehn:
-head -n 1000 older_than_5y_in_research.txt | sort | bin/dirs_info /neuro/labs/grantlab/research 2> /dev/null | bin/dirs_report --username daniel.haehn
-
-# analyze ayse.tanritanir's home folder:
-head -n 1000 older_than_5y_in_users.txt | grep '^/neuro/users/ayse.tanritanir' | sudo bin/dirs_info /neuro/users/ayse.tanritanir | bin/dirs_report --username ayse.tanritanir
+find /neuro/labs/grantlab/research -type f -atime '+730'
 ```
 
+The command above would give you an abundance of information and it would be too difficult to consume.
+
+### `oldir`
+
+`oldir` is a program which recursively searches for _parent directories_ where all files have
+not been accessed ever since a given _duration_.
+
+For example, if you had the following files:
+
+```
+base/a/q  4y
+base/a/w  5y
+base/b/e  5y
+base/b/r  5y
+```
+
+If we were to run `olddirs --since 5y base` we would want the output to include `base/a/w`, and `base/b`,
+since all subpaths of those paths are 5 years or older. We would not want the output to include
+`base/a` since `base/a/q` is under `base/a` but `base/a/q` is _not_ older than 5 years.
+Neither would we want the output to include `base/b/e` nor `base/b/r` since we want to aggregate the
+data: it's preferable to only include their parent `base/b`.
+
+#### `oldir` Algorithm
+
+```python
+# Python-like pseudocode
+def oldir(path, timestamp) -> list[Path]:
+    if path.is_file():
+        return [p for p in [path] if p.older_than(timestamp)]
+    subpath_info = [oldir
+(subpath, timestamp) for subpath in path]
+    if all(len(v) <= 1 for v in subpath_info):
+        return [path]  # path is a dir, everything it contains is older
+    else:
+        return flatten(subpath_info)  # path is a dir containing some things which are newer
+```
+
+
+### `dirs_report`
+
+`dirs_report` is a program which consumes the output of `oldir`, applying pretty-printing and optional filters.
+
+```shell
+# basic usage
+bin/oldir --since 1y /neuro/labs/grantlab/research/Ai_Others/ | bin/dirs_report
+# filter by username and/or size
+bin/oldir --since 1y /neuro/labs/grantlab/research/Ai_Others/ | bin/dirs_report --user aiwern.chung --size 1GiB
+```
+
+
+## Data
+
+To generate all data, I am running these commands:
+
+```shell
+find /neuro/labs/grantlab/research/ -type d -maxdepth 1 | parallel --verbose 'bin/oldir --since 2y {} > data/oldir/research/{/}.txt 2> data/oldir/research/{/}.log'
+find /neuro/users/ -type l -maxdepth 1 | parallel --verbose 'bin/oldir --since 2y {} > data/oldir/users/{/}.txt 2> data/oldir/users/{/}.log'
+```
+
+Note that `bin/oldir` needs to be run using `sudo` to avoid permission errors.
 
 ## Developing
 
