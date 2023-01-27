@@ -1,17 +1,33 @@
-## Motivation
+# oldir
 
-We are trying to find unused data on the FNNDSC NFS share.
+Find paths containing files which have not been accessed in a long time.
+Useful for doing filesystem cleanup and freeing up disk space.
+
+## About This Document
+
+Usage examples described below are specific to the cyber-infrastrucure of our lab, the FNNDSC.
+Nonetheless, it should all make sense for _any_ UNIX filesystem.
+
+## Background
+
+We have a NFS share mounted on all workstations at `/neuro`,
+home user directories in `/neuro/users`, and a common space
+`/neuro/labs/grantlab/research`.
+
+### Motivation
+
+We are trying to find unused data on the FNNDSC NFS share and
+move it to archival storage for the sake of freeing up space.
 
 ## How It Works
 
-Our first approach would be to use `find` to search for files which weren't accessed anytime recently
-(say, in the last 2 years) by checking the file metadata/stat's `atime`.
+The naive approach would be to use `find` to search for files which weren't accessed anytime recently (say, in the last 2 years) by checking the file metadata/stat's `atime`.
 
 ```shell
 find /neuro/labs/grantlab/research -type f -atime '+730'
 ```
 
-The command above would give you an abundance of information and it would be too difficult to consume.
+The command above would give you an over-abundance of information – too difficult to consume.
 
 ### `oldir`
 
@@ -53,6 +69,13 @@ def oldir(path, timestamp, subpath_is_older) -> (list[Path], bool):
         return flatten(subpath_info), False
 ```
 
+#### `oldir` Implementation Details
+
+- `oldir` is implemented in async Rust, so it's _super fast_.
+- Errors are printed to stderr but otherwise ignored.
+- Symbolic links are not followed.
+- The algorithm uses an accumulator, it cannot yield output until it has run to completion.
+
 ### `oldirs_report`
 
 `oldirs_report` is a program which consumes the output of `oldir`, applying pretty-printing and optional filters.
@@ -81,8 +104,6 @@ mkdir -vp data/oldir_2y/{research,users}
 find /neuro/labs/grantlab/research/ -maxdepth 1 -type d | parallel --verbose 'oldir --since 2y {}/ > data/oldir_2y/research/{/}.txt 2> data/oldir_2y/research/{/}.log'
 find /neuro/users/ -maxdepth 1 -type l | parallel --verbose 'oldir --since 2y {}/ > data/oldir_2y/users/{/}.txt 2> data/oldir_2y/users/{/}.log'
 ```
-
-Note that `bin/oldir` needs to be run using `sudo` to avoid permission errors.
 
 ## Examples: Generate Reports
 
@@ -119,3 +140,7 @@ After modifying `*.rs` files, rebuild:
 ```shell
 cargo build --release
 ```
+
+### Creating Examples
+
+https://www.unixtutorial.org/how-to-update-atime-and-mtime-for-a-file-in-unix/
