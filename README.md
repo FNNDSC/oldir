@@ -71,7 +71,7 @@ def oldir(path, timestamp, subpath_is_older) -> (list[Path], bool):
 
 #### `oldir` Implementation Details
 
-- `oldir` is implemented in async Rust, so it's _super fast_.
+- `oldir` is implemented in async Rust.
 - Errors are printed to stderr but otherwise ignored.
 - Symbolic links are not followed.
 - The algorithm uses an accumulator, it cannot yield output until it has run to completion.
@@ -141,6 +141,79 @@ After modifying `*.rs` files, rebuild:
 cargo build --release
 ```
 
+For compatibility, it's preferable to compile on an x86_64 Ubuntu 20.04 machine.
+
 ### Creating Examples
 
 https://www.unixtutorial.org/how-to-update-atime-and-mtime-for-a-file-in-unix/
+
+### Benchmarks
+
+Sadly `oldir` is slow.
+
+For a simpler case, see
+https://github.com/jennydaman/benchmark_rust_async_recursion
+
+```shell
+hyperfine --warmup 2 \
+    'find -type f -atime +730' \
+    'fd --unrestricted --type f --changed-before 2y' \
+    'fd --unrestricted --type f --changed-before 2y --threads 1' \
+    'oldir --since 2y .'
+```
+
+##### In a 85GB HDD
+
+```
+Benchmark 1: find -type f -atime +730
+  Time (mean ± σ):      1.221 s ±  0.042 s    [User: 0.410 s, System: 0.801 s]
+  Range (min … max):    1.180 s …  1.295 s    10 runs
+ 
+Benchmark 2: fd --unrestricted --type f --changed-before 2y
+  Time (mean ± σ):     287.9 ms ±   9.7 ms    [User: 512.4 ms, System: 991.1 ms]
+  Range (min … max):   273.2 ms … 306.7 ms    10 runs
+ 
+Benchmark 3: fd --unrestricted --type f --changed-before 2y --threads 1
+  Time (mean ± σ):     922.2 ms ±  21.4 ms    [User: 277.0 ms, System: 639.3 ms]
+  Range (min … max):   895.6 ms … 965.3 ms    10 runs
+ 
+Benchmark 4: oldir --since 2y .
+  Time (mean ± σ):      5.692 s ±  0.208 s    [User: 4.206 s, System: 2.635 s]
+  Range (min … max):    5.468 s …  6.212 s    10 runs
+ 
+Summary
+  'fd --unrestricted --type f --changed-before 2y' ran
+    3.20 ± 0.13 times faster than 'fd --unrestricted --type f --changed-before 2y --threads 1'
+    4.24 ± 0.20 times faster than 'find -type f -atime +730'
+   19.77 ± 0.98 times faster than 'oldir --since 2y .'
+```
+
+##### In a 485GB NFS mount
+
+```
+Benchmark 1: find -type f -atime +730
+  Time (mean ± σ):      5.825 s ±  4.826 s    [User: 0.077 s, System: 0.430 s]
+  Range (min … max):    3.299 s … 18.346 s    10 runs
+ 
+  Warning: The first benchmarking run for this command was significantly slower than the rest (8.936 s). This could be caused by (filesystem) caches that were not filled until after the first run. You should consider using the '--warmup' option to fill those caches before the actual benchmark. Alternatively, use the '--prepare' option to clear the caches before each timing run.
+ 
+Benchmark 2: fd --unrestricted --type f --changed-before 2y
+  Time (mean ± σ):     256.4 ms ±  42.3 ms    [User: 259.2 ms, System: 1062.3 ms]
+  Range (min … max):   192.2 ms … 321.3 ms    11 runs
+ 
+Benchmark 3: fd --unrestricted --type f --changed-before 2y --threads 1
+  Time (mean ± σ):      5.466 s ±  1.821 s    [User: 0.157 s, System: 0.448 s]
+  Range (min … max):    3.335 s …  8.128 s    10 runs
+ 
+Benchmark 4: oldir --since 2y .
+  Time (mean ± σ):     12.283 s ±  5.313 s    [User: 1.137 s, System: 1.092 s]
+  Range (min … max):    6.924 s … 22.089 s    10 runs
+ 
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet PC without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
+ 
+Summary
+  'fd --unrestricted --type f --changed-before 2y' ran
+   21.32 ± 7.93 times faster than 'fd --unrestricted --type f --changed-before 2y --threads 1'
+   22.72 ± 19.20 times faster than 'find -type f -atime +730'
+   47.91 ± 22.19 times faster than 'oldir --since 2y .'
+```
