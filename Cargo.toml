@@ -1,6 +1,6 @@
 [workspace]
 
 members = [
-    "dirs_report",
+    "oldirs_report",
     "oldir"
 ]

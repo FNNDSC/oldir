@@ -27,7 +27,7 @@ base/b/e  5y
 base/b/r  5y
 ```
 
-If we were to run `olddirs --since 5y base` we would want the output to include `base/a/w`, and `base/b`,
+If we were to run `olddir --since 5y base` we would want the output to include `base/a/w`, and `base/b`,
 since all subpaths of those paths are 5 years or older. We would not want the output to include
 `base/a` since `base/a/q` is under `base/a` but `base/a/q` is _not_ older than 5 years.
 Neither would we want the output to include `base/b/e` nor `base/b/r` since we want to aggregate the
@@ -53,25 +53,33 @@ def oldir(path, timestamp, subpath_is_older) -> (list[Path], bool):
         return flatten(subpath_info), False
 ```
 
-### `dirs_report`
+### `oldirs_report`
 
-`dirs_report` is a program which consumes the output of `oldir`, applying pretty-printing and optional filters.
+`oldirs_report` is a program which consumes the output of `oldir`, applying pretty-printing and optional filters.
+
+#### Usage Examples
+
+NOTE: avoid permission errors with `sudo -s` on a host with `no_root_squash` NFS privilege.
 
 ```shell
-# basic usage
-bin/oldir --since 1y /neuro/labs/grantlab/research/Ai_Others/ | bin/dirs_report
-# filter by username and/or size
-bin/oldir --since 1y /neuro/labs/grantlab/research/Ai_Others/ | bin/dirs_report --user aiwern.chung --size 1GiB
-```
+export PATH="/neuro/labs/grantlab/research/Jennings/progs/bin:$PATH"
 
+# basic usage
+oldir --since 1y /neuro/labs/grantlab/research/Ai_Others/ | oldirs_report
+# filter by username and/or size
+oldir --since 1y /neuro/labs/grantlab/research/Ai_Others/ | oldirs_report --user aiwern.chung --size 1GiB
+```
 
 ## Data
 
 To generate all data, I am running these commands:
 
 ```shell
-find /neuro/labs/grantlab/research/ -type d -maxdepth 1 | parallel --verbose 'bin/oldir --since 2y {} > data/oldir/research/{/}.txt 2> data/oldir/research/{/}.log'
-find /neuro/users/ -type l -maxdepth 1 | parallel --verbose 'bin/oldir --since 2y {} > data/oldir/users/{/}.txt 2> data/oldir/users/{/}.log'
+export PATH="/neuro/labs/grantlab/research/Jennings/progs/bin:$PATH"
+
+mkdir -vp data/oldir_2y/{research,users}
+find /neuro/labs/grantlab/research/ -type d -maxdepth 1 | parallel --verbose 'oldir --since 2y {}/ > data/oldir_2y/research/{/}.txt 2> data/oldir_2y/research/{/}.log'
+find /neuro/users/ -type l -maxdepth 1 | parallel --verbose 'oldir --since 2y {}/ > data/oldir_2y/users/{/}.txt 2> data/oldir_2y/users/{/}.log'
 ```
 
 Note that `bin/oldir` needs to be run using `sudo` to avoid permission errors.
