@@ -9,8 +9,17 @@ use tokio_stream::wrappers::ReadDirStream;
 
 /// Number of parallel recursive calls to make in each directory.
 /// This is _not_ the number of green threads to use, since each
-/// directory will spawn another *N* green threads.
-const BUFFER_UNORDERED: usize = 100;
+/// directory will spawn another *N* green threads. Thus a value
+/// larger than 1 would likely spiral out of control with
+/// "Too many open files" errors.
+/// 
+/// Besides, for several other reasons it's preferable to parallelize
+/// at the top-level using GNU parallel e.g.
+/// 
+/// ```shell
+/// find /neuro/labs/grantlab/research/ -type d -maxdepth 1 | parallel oldir
+/// ```
+const BUFFER_UNORDERED: usize = 1;
 
 #[derive(Parser)]
 #[clap(
@@ -118,6 +127,7 @@ async fn oldir_recursive(
             }
             Err(e) => {
                 eprintln!("Unable to call read_dir on {:?} : {:?}", path, e);
+                // should we panic if "Too many open files" error?
                 (vec![], all_older)
             }
         }
