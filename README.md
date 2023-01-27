@@ -84,6 +84,34 @@ find /neuro/users/ -maxdepth 1 -type l | parallel --verbose 'oldir --since 2y {}
 
 Note that `bin/oldir` needs to be run using `sudo` to avoid permission errors.
 
+## Examples: Generate Reports
+
+```shell
+export PATH="/neuro/labs/grantlab/research/Jennings/progs/bin:$PATH"
+cd /neuro/labs/grantlab/research/Jennings/for/rudolph/find_old_files/data/oldir_2y/research
+
+# check errors
+cat *.log
+
+# report EVERYTHING!!!
+cat *.txt | oldirs_report
+
+# report your own stuff that is larger than 1GB
+cat *.txt | oldirs_report --user $(whoami) --size 1GB
+
+# get all user UIDs
+cat *.txt | awk '{print $(NF-1)}' | sort | uniq
+
+# usage by (existing) person
+find /neuro/users/ -maxdepth 1 -type l \
+  | parallel 's="$(cat *.txt | oldirs_report --user {/} | tail -n 1 | awk "{print \$4}")" && printf "%-30s %s\n" "{/}" "$s"' \
+  > everyone.txt
+cat everyone.txt
+
+# sort the above output, starting from most usage
+cat everyone.txt | ansi2txt | sort -k2 -h -r
+```
+
 ## Developing
 
 After modifying `*.rs` files, rebuild:

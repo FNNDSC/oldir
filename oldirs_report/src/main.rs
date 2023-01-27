@@ -1,7 +1,6 @@
 use clap::Parser;
 use owo_colors::OwoColorize;
-use std::io::BufRead;
-use std::{io, sync::Arc};
+use std::io::{self, BufRead};
 use ubyte::{ByteUnit, ToByteUnit};
 use users::Users;
 
@@ -9,8 +8,8 @@ use users::Users;
 #[clap(about = "Filter, pretty-print, and summarize the output of oldirs.")]
 struct Cli {
     /// username or UID to filter by
-    #[clap(short, long, default_value = "")]
-    user: Option<String>,
+    #[clap(short, long, value_parser = parse_user)]
+    user: Option<users::User>,
     /// minimum size to filter by
     #[clap(short, long, default_value = "0B", value_parser = parse_byte_unit)]
     size: ByteUnit,
@@ -28,16 +27,22 @@ fn parse_oldirs_line(line: String) -> anyhow::Result<(String, u32, ByteUnit)> {
     Ok((path.to_string(), uid.parse()?, bytes))
 }
 
-fn get_user(uc: &mut users::UsersCache, user: &str) -> Option<Arc<users::User>> {
-    uc.get_user_by_name(user)
-        .or_else(|| user.parse().ok().and_then(|uid| uc.get_user_by_uid(uid)))
+fn parse_user(given_user: &str) -> Result<users::User, String> {
+    if let Some(user) = users::get_user_by_name(&given_user) {
+        Ok(user)
+    } else {
+        given_user
+            .parse()
+            .ok()
+            .and_then(users::get_user_by_uid)
+            .ok_or_else(|| format!("no such user: {}", given_user))
+    }
 }
 
 fn main() -> anyhow::Result<()> {
     let args: Cli = Cli::parse();
     let mut total_size = ByteUnit::Byte(0);
-    let mut uc = users::UsersCache::new();
-    let filter_user = args.user.as_deref().and_then(|u| get_user(&mut uc, u));
+    let uc = users::UsersCache::new();
 
     for line in io::stdin().lock().lines() {
         let (path, uid, size) = line
@@ -48,7 +53,7 @@ fn main() -> anyhow::Result<()> {
         if size < args.size {
             continue;
         }
-        if let Some(ref user) = filter_user {
+        if let Some(ref user) = args.user {
             if user.uid() != uid {
                 continue;
             }
@@ -56,7 +61,7 @@ fn main() -> anyhow::Result<()> {
 
         total_size += size;
 
-        if filter_user.is_none() {
+        if args.user.is_none() {
             let colored_username = uc
                 .get_user_by_uid(uid)
                 .map(|u| u.name().to_string_lossy().cyan().to_string())
