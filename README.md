@@ -99,9 +99,13 @@ To generate all data, I am running these commands:
 ```shell
 export PATH="/neuro/labs/grantlab/research/Jennings/progs/bin:$PATH"
 
-mkdir -vp data/oldir_2y/{research,users}
-find /neuro/labs/grantlab/research/ -maxdepth 1 -type d | parallel --verbose 'oldir --since 2y {}/ > data/oldir_2y/research/{/}.txt 2> data/oldir_2y/research/{/}.log'
-find /neuro/users/ -maxdepth 1 -type l | parallel --verbose 'oldir --since 2y {}/ > data/oldir_2y/users/{/}.txt 2> data/oldir_2y/users/{/}.log'
+mkdir -vp data/oldir_2y_rerun/{research,users}
+find /neuro/labs/grantlab/research/ -maxdepth 1 -type d \
+  | /usr/bin/time -v \
+  parallel --verbose 'oldir --since 2y {}/ > data/oldir_2y_rerun/research/{/}.txt 2> data/oldir_2y_rerun/research/{/}.log'
+find /neuro/users/ -maxdepth 1 -type l \
+  | /usr/bin/time -v \
+  parallel --verbose 'oldir --since 2y {}/ > data/oldir_2y/users/{/}.txt 2> data/oldir_2y/users/{/}.log'
 ```
 
 ## Examples: Generate Reports
