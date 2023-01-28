@@ -1,5 +1,5 @@
-use std::fmt::Display;
 use owo_colors::OwoColorize;
+use std::fmt::Display;
 use ubyte::ByteUnit;
 
 #[derive(Default)]
@@ -7,7 +7,7 @@ pub(crate) struct ParentPrintBuffer {
     // invariant: if parent is not empty, then buffer is not empty either.
     parent: String,
     buffer: Vec<(String, Option<String>, ByteUnit)>,
-    group: usize
+    group: usize,
 }
 
 impl ParentPrintBuffer {
@@ -21,7 +21,7 @@ impl ParentPrintBuffer {
     pub fn push(&mut self, path: String, username: Option<String>, size: ByteUnit) {
         if self.group == 0 {
             print(&path, username, size, "");
-            return
+            return;
         }
         let given_parent = parent_of(&path).to_string();
         if self.parent.is_empty() {
@@ -51,7 +51,10 @@ impl ParentPrintBuffer {
     }
 
     fn total_size(&self) -> ByteUnit {
-        self.buffer.iter().map(|(_p, _u, s)| s.clone()).fold(ByteUnit::Byte(0), |acc, x| acc + x)
+        self.buffer
+            .iter()
+            .map(|(_p, _u, s)| s.clone())
+            .fold(ByteUnit::Byte(0), |acc, x| acc + x)
     }
 
     fn print_all_and_drain(&mut self) {

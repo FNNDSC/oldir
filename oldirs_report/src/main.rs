@@ -1,11 +1,11 @@
 mod prefix_buffer;
 
+use crate::prefix_buffer::ParentPrintBuffer;
 use clap::Parser;
 use owo_colors::OwoColorize;
 use std::io::{self, BufRead};
 use ubyte::{ByteUnit, ToByteUnit};
 use users::Users;
-use crate::prefix_buffer::ParentPrintBuffer;
 
 #[derive(Parser)]
 #[clap(about = "Filter, pretty-print, and summarize the output of oldirs.")]
@@ -28,7 +28,7 @@ struct Cli {
     ///
     /// This functionality is "lossy," pass 0 to disable.
     #[clap(short, long, default_value_t = 10)]
-    group: usize
+    group: usize,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -37,11 +37,13 @@ fn main() -> anyhow::Result<()> {
     let uc = users::UsersCache::new();
     let mut printer = ParentPrintBuffer::new(args.group);
 
-    for line in io::stdin().lock().lines() {
-        let (path, uid, size) = line
-            .map_err(anyhow::Error::from)
-            .and_then(parse_oldirs_line)?;
-
+    let processed_stdin = io::stdin()
+        .lock()
+        .lines()
+        .filter_map(discard_error_from_lines)
+        .filter(discard_empty_lines)
+        .filter_map(parse_oldir_line_continue_on_error);
+    for (path, uid, size) in processed_stdin {
         // filters
         if size < args.size {
             continue;
@@ -75,18 +77,40 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-
-
-fn parse_byte_unit(s: &str) -> Result<ByteUnit, String> {
-    s.parse().map_err(|e: ubyte::Error| e.to_string())
+fn discard_error_from_lines(r: io::Result<String>) -> Option<String> {
+    match r {
+        Ok(line) => Some(line),
+        Err(e) => {
+            eprintln!("ERROR: {e:?}");
+            None
+        }
+    }
 }
 
-fn parse_oldirs_line(line: String) -> anyhow::Result<(String, u32, ByteUnit)> {
+fn discard_empty_lines(line: &String) -> bool {
+    !line.trim().is_empty()
+}
+
+fn parse_oldir_line_continue_on_error(line: String) -> Option<(String, u32, ByteUnit)> {
+    match parse_oldir_line(&line) {
+        Ok(t) => Some(t),
+        Err(e) => {
+            println!("Error parsing line: {e:?}\n\t-->{line}<--");
+            None
+        }
+    }
+}
+
+fn parse_oldir_line(line: &str) -> anyhow::Result<(String, u32, ByteUnit)> {
     let e = || anyhow::Error::msg("malformed");
     let (s, size) = line.rsplit_once(' ').ok_or_else(e)?;
     let (path, uid) = s.rsplit_once(' ').ok_or_else(e)?;
     let bytes = size.parse().ok().ok_or_else(e)?;
     Ok((path.to_string(), uid.parse()?, bytes))
+}
+
+fn parse_byte_unit(s: &str) -> Result<ByteUnit, String> {
+    s.parse().map_err(|e: ubyte::Error| e.to_string())
 }
 
 fn parse_user(given_user: &str) -> Result<users::User, String> {
@@ -100,4 +124,3 @@ fn parse_user(given_user: &str) -> Result<users::User, String> {
             .ok_or_else(|| format!("no such user: {}", given_user))
     }
 }
-
